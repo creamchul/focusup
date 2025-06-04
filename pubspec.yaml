@@ -34,6 +34,9 @@ dependencies:
   # 기본 UI
   cupertino_icons: ^1.0.2
 
+  # 상태 관리
+  provider: ^6.1.1
+
   # 로컬 저장소
   shared_preferences: ^2.2.2
 
@@ -46,6 +49,8 @@ dependencies:
 
   # UI/차트
   fl_chart: ^0.63.0
+  table_calendar: ^3.0.9
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:

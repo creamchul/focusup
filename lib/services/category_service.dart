@@ -24,17 +24,33 @@ class CategoryService {
         return FocusCategoryModel.getDefaultCategories();
       }
       
-      final categories = categoriesJson
-          .map((json) => FocusCategoryModel.fromMap(jsonDecode(json)))
-          .where((category) => category.isActive)
-          .toList();
+      final categories = <FocusCategoryModel>[];
+      
+      // 각 카테고리를 안전하게 파싱
+      for (final json in categoriesJson) {
+        try {
+          final category = FocusCategoryModel.fromMap(jsonDecode(json));
+          if (category.isActive) {
+            categories.add(category);
+          }
+        } catch (e) {
+          print('카테고리 파싱 실패, 건너뜀: $e');
+          continue;
+        }
+      }
+      
+      // 파싱된 카테고리가 없으면 기본 카테고리 반환
+      if (categories.isEmpty) {
+        print('유효한 카테고리가 없어 기본 카테고리를 반환합니다');
+        return FocusCategoryModel.getDefaultCategories();
+      }
       
       // order 순으로 정렬
       categories.sort((a, b) => a.order.compareTo(b.order));
       
       return categories;
     } catch (e) {
-      print('카테고리 로딩 실패: $e');
+      print('카테고리 로딩 실패, 기본 카테고리 반환: $e');
       return FocusCategoryModel.getDefaultCategories();
     }
   }
@@ -45,16 +61,25 @@ class CategoryService {
       final prefs = await SharedPreferences.getInstance();
       final defaultCategories = FocusCategoryModel.getDefaultCategories();
       
-      final categoriesJson = defaultCategories
-          .map((category) => jsonEncode(category.toMap()))
-          .toList();
+      final categoriesJson = <String>[];
+      
+      // 각 카테고리를 안전하게 직렬화
+      for (final category in defaultCategories) {
+        try {
+          categoriesJson.add(jsonEncode(category.toMap()));
+        } catch (e) {
+          print('카테고리 직렬화 실패, 건너뜀: ${category.name} - $e');
+          continue;
+        }
+      }
       
       await prefs.setStringList(_categoriesKey, categoriesJson);
       await prefs.setBool(_defaultsInitializedKey, true);
       
-      print('기본 카테고리 초기화 완료: ${defaultCategories.length}개');
+      print('기본 카테고리 초기화 완료: ${categoriesJson.length}개');
     } catch (e) {
       print('기본 카테고리 초기화 실패: $e');
+      // 초기화 실패해도 계속 진행
     }
   }
 
@@ -240,6 +265,17 @@ class CategoryService {
       print('카테고리 데이터 초기화 완료');
     } catch (e) {
       print('카테고리 데이터 초기화 실패: $e');
+    }
+  }
+
+  /// 문제가 있는 카테고리 데이터 복구
+  static Future<void> resetToDefault() async {
+    try {
+      await clearAllData();
+      await _initializeDefaultCategories();
+      print('카테고리 데이터 기본값으로 복구 완료');
+    } catch (e) {
+      print('카테고리 데이터 복구 실패: $e');
     }
   }
 } 

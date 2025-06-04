@@ -6,8 +6,7 @@ import '../models/focus_category_model.dart';
 import '../services/category_service.dart';
 
 enum TimerType {
-  pomodoro,
-  freeTimer,
+  timer,
   stopwatch,
 }
 
@@ -118,11 +117,8 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
   void _initializeTimer() {
     switch (widget.timerType) {
-      case TimerType.pomodoro:
+      case TimerType.timer:
         _selectedMinutes = 25;
-        break;
-      case TimerType.freeTimer:
-        _selectedMinutes = 30;
         break;
       case TimerType.stopwatch:
         _selectedMinutes = 0;
@@ -157,15 +153,9 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
   void _startTimer() {
     switch (widget.timerType) {
-      case TimerType.pomodoro:
+      case TimerType.timer:
         _timerService.startPomodoro(
           minutes: _selectedMinutes,
-          categoryId: _selectedCategory?.id,
-        );
-        break;
-      case TimerType.freeTimer:
-        _timerService.startFreeTimer(
-          _selectedMinutes,
           categoryId: _selectedCategory?.id,
         );
         break;
@@ -189,16 +179,19 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
           children: [
             Icon(Icons.celebration, color: AppColors.primary, size: 24),
             const SizedBox(width: 8),
-            const Text('집중 완료!'),
+            const Text('🎉 완료!'),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.forest, color: AppColors.treeGreen, size: 48),
+            const Text(
+              '🐾',
+              style: TextStyle(fontSize: 48),
+            ),
             const SizedBox(height: 16),
             Text(
-              '${_selectedMinutes}분 집중을 완료했습니다!\n🌳 새로운 나무가 자랐어요!',
+              '${_selectedMinutes}분 집중을 완료했습니다!\n🐾 동물 친구와 더 친해졌어요!',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16),
             ),
@@ -257,40 +250,51 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: AppColors.getBackground(isDark),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 헤더
-            _buildHeader(isDark),
-            
-            // 메인 콘텐츠
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // 카테고리 선택
-                    if (!_isLoadingCategories && _categories.isNotEmpty)
-                      _buildCategorySelection(isDark),
-                    const SizedBox(height: 32),
-                    
-                    // 타이머 디스플레이
-                    _buildTimerDisplay(isDark),
-                    const SizedBox(height: 32),
-                    
-                    // 컨트롤 버튼들
-                    _buildControlButtons(isDark),
-                    const SizedBox(height: 32),
-                    
-                    // 상태 메시지
-                    _buildStatusMessage(isDark),
-                  ],
+    return WillPopScope(
+      onWillPop: () async {
+        // 타이머가 실행 중일 때는 뒤로가기 막기
+        if (_timerService.status == TimerStatus.running ||
+            _timerService.status == TimerStatus.paused) {
+          _showGiveUpConfirmDialog();
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.getBackground(isDark),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // 헤더
+              _buildHeader(isDark),
+              
+              // 메인 콘텐츠
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // 카테고리 선택
+                      if (!_isLoadingCategories && _categories.isNotEmpty)
+                        _buildCategorySelection(isDark),
+                      const SizedBox(height: 32),
+                      
+                      // 타이머 디스플레이
+                      _buildTimerDisplay(isDark),
+                      const SizedBox(height: 32),
+                      
+                      // 컨트롤 버튼들
+                      _buildControlButtons(isDark),
+                      const SizedBox(height: 32),
+                      
+                      // 상태 메시지
+                      _buildStatusMessage(isDark),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -302,7 +306,15 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              // 타이머가 실행 중일 때는 확인 다이얼로그 표시
+              if (_timerService.status == TimerStatus.running ||
+                  _timerService.status == TimerStatus.paused) {
+                _showGiveUpConfirmDialog();
+              } else {
+                Navigator.pop(context);
+              }
+            },
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -669,30 +681,19 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // 정지/리셋 버튼
+        // 정지 버튼 (포기로 간주)
         if (_timerService.status != TimerStatus.initial)
           _buildControlButton(
             icon: Icons.stop,
             label: '정지',
             color: AppColors.error,
             onTap: () {
-              _timerService.resetTimer();
+              _showGiveUpConfirmDialog();
             },
           ),
         
         // 메인 버튼 (시작/일시정지/재개)
         _buildMainControlButton(isDark),
-        
-        // 일시정지 중일 때만 리셋 버튼 표시
-        if (_timerService.status == TimerStatus.paused)
-          _buildControlButton(
-            icon: Icons.refresh,
-            label: '리셋',
-            color: AppColors.textSecondary,
-            onTap: () {
-              _timerService.resetTimer();
-            },
-          ),
       ],
     ).animate().fadeIn(
       delay: 400.ms,
@@ -835,7 +836,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
         message = '타이머가 일시정지되었습니다.\n준비되면 재개 버튼을 눌러주세요 ⏸️';
         break;
       case TimerStatus.completed:
-        message = '축하합니다! 집중을 완료했습니다! 🎉\n새로운 나무가 자랐어요 🌳';
+        message = '축하합니다! 집중을 완료했습니다! 🎉\n동물 친구와 더 친해졌어요 🐾';
         break;
       case TimerStatus.stopped:
         message = '타이머가 정지되었습니다.\n다시 시작해보세요 🔄';
@@ -879,7 +880,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          widget.timerType == TimerType.pomodoro ? '포모도로 시간 설정' : '집중 시간 설정',
+          widget.timerType == TimerType.timer ? '집중 시간 설정' : '집중 시간 설정',
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -939,10 +940,8 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
   String _getTitle() {
     switch (widget.timerType) {
-      case TimerType.pomodoro:
-        return '포모도로 타이머';
-      case TimerType.freeTimer:
-        return '자유 타이머';
+      case TimerType.timer:
+        return '타이머';
       case TimerType.stopwatch:
         return '스톱워치';
     }
@@ -950,12 +949,128 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
 
   String _getSubtitle() {
     switch (widget.timerType) {
-      case TimerType.pomodoro:
-        return '25분 집중, 5분 휴식';
-      case TimerType.freeTimer:
-        return '원하는 시간만큼 집중';
+      case TimerType.timer:
+        return '집중 시간 설정';
       case TimerType.stopwatch:
         return '무제한 집중 측정';
     }
+  }
+
+  void _showStopConfirmDialog() {
+    _showGiveUpConfirmDialog();
+  }
+
+  void _showGiveUpConfirmDialog() {
+    if (!mounted || _isDisposed) return;
+    
+    // 스톱워치의 경우 10분 미만일 때만 포기로 간주
+    if (widget.timerType == TimerType.stopwatch) {
+      final elapsedMinutes = (_timerService.elapsedSeconds / 60).round();
+      if (elapsedMinutes >= 10) {
+        // 10분 이상이면 보상 지급 후 정상 종료
+        _grantStopwatchReward();
+        return;
+      }
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: AppColors.warning, size: 24),
+            SizedBox(width: 8),
+            Text('집중 포기'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '😢',
+              style: TextStyle(fontSize: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.timerType == TimerType.stopwatch
+                  ? '아직 10분이 지나지 않았어요.\n정말 포기하시겠어요?'
+                  : '집중을 포기하시겠어요?\n동물 친구가 슬퍼할 거예요.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('계속하기'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // 다이얼로그 닫기
+              _timerService.resetTimer(); // 타이머 정지
+              Navigator.of(context).pop(); // 화면 나가기
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('포기하기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _grantStopwatchReward() async {
+    // 10분 이상 스톱워치 사용 시 보상 지급 (RewardService 사용)
+    // 임시로 간단한 완료 다이얼로그만 표시
+    if (!mounted) return;
+    
+    final elapsedMinutes = (_timerService.elapsedSeconds / 60).round();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.celebration, color: AppColors.primary, size: 24),
+            const SizedBox(width: 8),
+            const Text('스톱워치 완료!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '🎉',
+              style: TextStyle(fontSize: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '${elapsedMinutes}분 동안 집중했습니다!\n🐾 동물 친구와 더 친해졌어요!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _timerService.resetTimer();
+              Navigator.of(context).pop(); // 타이머 화면도 닫기
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: const Text('확인', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 } 

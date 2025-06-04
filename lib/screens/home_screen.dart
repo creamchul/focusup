@@ -12,6 +12,9 @@ import '../services/precision_timer_service.dart';
 import 'forest_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
+import '../services/reward_service.dart';
+import '../models/reward_models.dart';
+import '../utils/colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,11 +29,14 @@ class _HomeScreenState extends State<HomeScreen> {
   int _streakDays = 0;
   int _totalTrees = 0;
   int _forestLevel = 0;
+  late final RewardService _rewardService;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _rewardService = RewardService();
+    _loadRewardData();
   }
 
   Future<void> _loadData() async {
@@ -43,6 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadRewardData() async {
+    await _rewardService.loadUserProgress();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -50,6 +60,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          children: [
+            Icon(
+              Icons.pets,
+              color: Colors.brown[600],
+              size: 28,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Focus Safari',
+              style: TextStyle(
+                color: AppColors.getTextPrimary(isDark),
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.settings,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadData,
@@ -63,6 +111,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 // 헤더
                 _buildHeader(isDark),
                 const SizedBox(height: 32),
+                
+                // 보상 시스템 UI
+                _buildRewardSection(isDark),
+                const SizedBox(height: 24),
                 
                 // 오늘의 집중 상태
                 FocusStatsCard(
@@ -79,9 +131,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 
                 // 빠른 시작 버튼들
                 QuickActionButtons(
-                  onPomodoroTap: () => _navigateToTimer(TimerType.pomodoro),
-                  onFreeTimerTap: () => _navigateToTimer(TimerType.freeTimer),
-                  onStopwatchTap: () => _navigateToTimer(TimerType.stopwatch),
+                  onTimerTap: () => _navigateToTimer(),
+                  onStopwatchTap: () => _navigateToStopwatch(),
                 ).animate().fadeIn(
                   delay: 200.ms,
                   duration: 600.ms,
@@ -89,22 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   begin: 0.3,
                   end: 0,
                   delay: 200.ms,
-                  duration: 600.ms,
-                  curve: Curves.easeOutQuart,
-                ),
-                const SizedBox(height: 24),
-                
-                // 숲 진행 상황
-                ForestProgressCard(
-                  totalTrees: _totalTrees,
-                  forestLevel: _forestLevel,
-                ).animate().fadeIn(
-                  delay: 400.ms,
-                  duration: 600.ms,
-                ).slideY(
-                  begin: 0.3,
-                  end: 0,
-                  delay: 400.ms,
                   duration: 600.ms,
                   curve: Curves.easeOutQuart,
                 ),
@@ -121,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   duration: 600.ms,
                   curve: Curves.easeOutQuart,
                 ),
-                const SizedBox(height: 100), // 하단 여백
+                const SizedBox(height: 100),
               ],
             ),
           ),
@@ -150,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '오늘도 집중해보세요 🌱',
+              '오늘도 동물 친구들과 집중해보세요 🦁',
               style: TextStyle(
                 fontSize: 16,
                 color: AppColors.textSecondary,
@@ -170,15 +205,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: GestureDetector(
             onTap: () {
-              // 새로운 정밀 타이머 화면으로 이동
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const PrecisionTimerScreen(
-                    initialMode: TimerMode.pomodoro,
+                    initialMode: TimerMode.timer,
                   ),
                 ),
-              ).then((_) => _loadData());
+              );
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -229,9 +263,9 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () {},
           ),
           _buildNavItem(
-            icon: Icons.forest_outlined,
-            activeIcon: Icons.forest,
-            label: '내 숲',
+            icon: Icons.pets_outlined,
+            activeIcon: Icons.pets,
+            label: '사파리',
             isActive: false,
             isDark: isDark,
             onTap: () {
@@ -240,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(
                   builder: (context) => const ForestScreen(),
                 ),
-              ).then((_) => _loadData()); // 돌아올 때 데이터 새로고침
+              ).then((_) => _loadData());
             },
           ),
           _buildNavItem(
@@ -255,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(
                   builder: (context) => const StatsScreen(),
                 ),
-              ).then((_) => _loadData()); // 돌아올 때 데이터 새로고침
+              ).then((_) => _loadData());
             },
           ),
           _buildNavItem(
@@ -270,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(
                   builder: (context) => const SettingsScreen(),
                 ),
-              ).then((_) => _loadData()); // 돌아올 때 데이터 새로고침
+              ).then((_) => _loadData());
             },
           ),
         ],
@@ -328,12 +362,325 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _navigateToTimer(TimerType type) {
+  void _navigateToTimer() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => TimerScreen(timerType: type),
+        builder: (context) => const PrecisionTimerScreen(
+          initialMode: TimerMode.timer,
+        ),
       ),
-    ).then((_) => _loadData()); // 돌아올 때 데이터 새로고침
+    ).then((_) => _loadData());
+  }
+
+  void _navigateToStopwatch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PrecisionTimerScreen(
+          initialMode: TimerMode.stopwatch,
+        ),
+      ),
+    ).then((_) => _loadData());
+  }
+
+  Widget _buildRewardSection(bool isDark) {
+    return AnimatedBuilder(
+      animation: _rewardService,
+      builder: (context, child) {
+        final progress = _rewardService.userProgress;
+        return Column(
+          children: [
+            // 레벨 및 경험치
+            _buildLevelCard(isDark, progress),
+            const SizedBox(height: 16),
+            
+            Row(
+              children: [
+                // 스트릭 카드
+                Expanded(child: _buildStreakCard(isDark, progress)),
+                const SizedBox(width: 12),
+                // 동물 카드
+                Expanded(child: _buildAnimalCard(isDark, progress)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // 칭호 및 통계
+            _buildStatsCard(isDark, progress),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLevelCard(bool isDark, UserProgress progress) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withOpacity(0.1),
+            AppColors.primary.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '레벨 ${progress.currentLevel}',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  Text(
+                    progress.currentTitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: TitleData.getTitleColor(progress.currentTitle),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '경험치 ${progress.currentLevelExp}/${progress.expToNextLevel}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: _rewardService.getLevelProgress(),
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+              minHeight: 8,
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms).slideY(
+      begin: 0.2,
+      end: 0,
+      duration: 600.ms,
+      curve: Curves.easeOutQuart,
+    );
+  }
+
+  Widget _buildStreakCard(bool isDark, UserProgress progress) {
+    final streakEmoji = _rewardService.getStreakEmoji();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.getSurface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.getBorder(isDark),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (streakEmoji.isNotEmpty) ...[
+                Text(
+                  streakEmoji,
+                  style: const TextStyle(fontSize: 20),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Icon(
+                Icons.local_fire_department,
+                color: progress.currentStreak > 0 ? Colors.orange : AppColors.textSecondary,
+                size: 24,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${progress.currentStreak}일',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: progress.currentStreak > 0 ? Colors.orange : AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            '연속 집중',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(
+      delay: 200.ms,
+      duration: 600.ms,
+    ).slideX(
+      begin: -0.2,
+      end: 0,
+      delay: 200.ms,
+      duration: 600.ms,
+      curve: Curves.easeOutQuart,
+    );
+  }
+
+  Widget _buildAnimalCard(bool isDark, UserProgress progress) {
+    final animalEmoji = AnimalData.getAnimalEmoji(progress.animal.type);
+    final animalName = AnimalData.getAnimalName(progress.animal.type);
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.getSurface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.getBorder(isDark),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            animalEmoji,
+            style: const TextStyle(fontSize: 32),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            animalName,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          Text(
+            '유대 ${progress.animal.bondLevel}',
+            style: TextStyle(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(
+      delay: 400.ms,
+      duration: 600.ms,
+    ).slideX(
+      begin: 0.2,
+      end: 0,
+      delay: 400.ms,
+      duration: 600.ms,
+      curve: Curves.easeOutQuart,
+    );
+  }
+
+  Widget _buildStatsCard(bool isDark, UserProgress progress) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.getSurface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.getBorder(isDark),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem(
+            icon: Icons.timer,
+            label: '총 집중',
+            value: '${progress.totalFocusMinutes}분',
+            color: AppColors.primary,
+          ),
+          _buildStatItem(
+            icon: Icons.psychology,
+            label: '세션 수',
+            value: '${progress.totalSessions}회',
+            color: AppColors.success,
+          ),
+          _buildStatItem(
+            icon: Icons.emoji_events,
+            label: '배지',
+            value: '${progress.earnedBadges.length}개',
+            color: AppColors.warning,
+          ),
+        ],
+      ),
+    ).animate().fadeIn(
+      delay: 600.ms,
+      duration: 600.ms,
+    ).slideY(
+      begin: 0.2,
+      end: 0,
+      delay: 600.ms,
+      duration: 600.ms,
+      curve: Curves.easeOutQuart,
+    );
+  }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 } 

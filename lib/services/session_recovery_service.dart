@@ -75,7 +75,7 @@ class SessionRecoveryService {
       try {
         mode = TimerMode.values.firstWhere(
           (e) => e.toString() == modeString,
-          orElse: () => TimerMode.pomodoro,
+          orElse: () => TimerMode.timer,
         );
       } catch (e) {
         dev.log('알 수 없는 타이머 모드: $modeString');

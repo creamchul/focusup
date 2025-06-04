@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../models/reward_models.dart';
+import '../services/theme_service.dart';
+import '../services/reward_service.dart';
+import '../utils/colors.dart';
 import '../constants/app_colors.dart';
-import '../services/storage_service.dart';
 
 class ForestScreen extends StatefulWidget {
   const ForestScreen({super.key});
@@ -11,23 +14,21 @@ class ForestScreen extends StatefulWidget {
 }
 
 class _ForestScreenState extends State<ForestScreen> {
-  int _totalTrees = 0;
-  int _forestLevel = 0;
-  int _totalFocusTime = 0;
-  int _streakDays = 0;
+  final RewardService _rewardService = RewardService();
+  UserProgress? _userProgress;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadForestData();
+    _loadData();
   }
 
-  void _loadForestData() {
+  Future<void> _loadData() async {
+    final progress = await _rewardService.getUserProgress();
     setState(() {
-      _totalTrees = StorageService.getTotalTrees();
-      _forestLevel = StorageService.getForestLevel();
-      _totalFocusTime = StorageService.getTotalFocusTime();
-      _streakDays = StorageService.getStreakDays();
+      _userProgress = progress;
+      _isLoading = false;
     });
   }
 
@@ -35,501 +36,371 @@ class _ForestScreenState extends State<ForestScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
+    
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => _loadForestData(),
-          color: AppColors.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                // 헤더
-                _buildHeader(isDark),
-                
-                // 숲 통계 카드
-                _buildForestStats(isDark),
-                
-                // 레벨 진행률
-                _buildLevelProgress(isDark),
-                
-                // 나무 숲 그리드
-                _buildForestGrid(isDark),
-                
-                // 성취 정보
-                _buildAchievementInfo(isDark),
-                
-                const SizedBox(height: 100), // 하단 여백
-              ],
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          children: [
+            Icon(
+              Icons.pets,
+              color: Colors.brown[600],
+              size: 24,
             ),
-          ),
+            const SizedBox(width: 8),
+            Text(
+              '내 사파리',
+              style: TextStyle(
+                color: AppColors.getTextPrimary(isDark),
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
         ),
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: AppColors.getTextPrimary(isDark),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildSafariContent(isDark),
+    );
+  }
+
+  Widget _buildSafariContent(bool isDark) {
+    if (_userProgress == null) {
+      return const Center(child: Text('데이터를 불러올 수 없습니다.'));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 현재 동물
+          _buildCurrentAnimalCard(isDark),
+          const SizedBox(height: 24),
+          
+          // 동물 컬렉션
+          _buildAnimalCollection(isDark),
+          const SizedBox(height: 24),
+          
+          // 진행 상황
+          _buildProgressSection(isDark),
+          const SizedBox(height: 100),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildCurrentAnimalCard(bool isDark) {
+    final animal = _userProgress!.animal;
+    final animalEmoji = AnimalData.getAnimalEmoji(animal.type);
+    final animalName = AnimalData.getAnimalName(animal.type);
+    final animalDesc = AnimalData.getAnimalDescription(animal.type);
+    
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      decoration: BoxDecoration(
+        color: AppColors.getSurface(isDark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.brown.withOpacity(0.3),
+          width: 2,
+        ),
+      ),
+      child: Column(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            '현재 동물 친구',
+            style: TextStyle(
+              fontSize: 16,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          Text(
+            animalEmoji,
+            style: const TextStyle(fontSize: 80),
+          ),
+          const SizedBox(height: 16),
+          
+          Text(
+            animalName,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          Text(
+            animalDesc,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.brown.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '유대 레벨 ${animal.bondLevel}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.brown[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(
+      duration: 600.ms,
+    ).slideY(
+      begin: 0.2,
+      end: 0,
+      duration: 600.ms,
+      curve: Curves.easeOutQuart,
+    );
+  }
+
+  Widget _buildAnimalCollection(bool isDark) {
+    final totalHours = _userProgress!.totalFocusMinutes ~/ 60;
+    final streakDays = _userProgress!.currentStreak;
+    final level = _userProgress!.currentLevel;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '동물 컬렉션',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppColors.getTextPrimary(isDark),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1,
+          ),
+          itemCount: AnimalType.values.length,
+          itemBuilder: (context, index) {
+            final animalType = AnimalType.values[index];
+            final isUnlocked = AnimalData.isUnlocked(
+              animalType, 
+              totalHours, 
+              streakDays, 
+              level
+            );
+            
+            return _buildAnimalCollectionItem(isDark, animalType, isUnlocked);
+          },
+        ),
+      ],
+    ).animate().fadeIn(
+      delay: 200.ms,
+      duration: 600.ms,
+    );
+  }
+
+  Widget _buildAnimalCollectionItem(bool isDark, AnimalType type, bool isUnlocked) {
+    final emoji = isUnlocked ? AnimalData.getAnimalEmoji(type) : '🔒';
+    final name = isUnlocked ? AnimalData.getAnimalName(type) : '???';
+    final requiredHours = AnimalData.getUnlockHours(type);
+    final specialCondition = AnimalData.getSpecialUnlockCondition(type);
+    
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isUnlocked 
+            ? AppColors.getSurface(isDark)
+            : AppColors.getSurface(isDark).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isUnlocked 
+              ? Colors.brown.withOpacity(0.3)
+              : AppColors.getBorder(isDark),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            emoji,
+            style: TextStyle(
+              fontSize: 32,
+              color: isUnlocked ? null : Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: isUnlocked 
+                  ? AppColors.getTextPrimary(isDark)
+                  : AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (!isUnlocked) ...[
+            const SizedBox(height: 2),
+            Text(
+              specialCondition.isNotEmpty 
+                  ? specialCondition['description']
+                  : '${requiredHours}시간',
+              style: TextStyle(
+                fontSize: 8,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressSection(bool isDark) {
+    final nextAnimal = AnimalData.getNextUnlockTarget(
+      _userProgress!.totalFocusMinutes ~/ 60,
+      _userProgress!.currentStreak,
+      _userProgress!.currentLevel,
+    );
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '다음 목표',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppColors.getTextPrimary(isDark),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.getSurface(isDark),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.getBorder(isDark),
+              width: 1,
+            ),
+          ),
+          child: Column(
             children: [
               Text(
-                '내 숲 🌲',
+                AnimalData.getAnimalEmoji(nextAnimal),
+                style: const TextStyle(fontSize: 48),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AnimalData.getAnimalName(nextAnimal),
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: AppColors.getTextPrimary(isDark),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                '집중할 때마다 나무가 자라요',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.treeGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.treeGreen.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: Icon(
-              Icons.eco,
-              color: AppColors.treeGreen,
-              size: 24,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForestStats(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.getSurface(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.getBorder(isDark),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatItem(
-              icon: Icons.forest,
-              label: '심은 나무',
-              value: '$_totalTrees그루',
-              color: AppColors.treeGreen,
-              isDark: isDark,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.getBorder(isDark),
-          ),
-          Expanded(
-            child: _buildStatItem(
-              icon: Icons.trending_up,
-              label: '숲 레벨',
-              value: 'Lv.$_forestLevel',
-              color: AppColors.primary,
-              isDark: isDark,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.getBorder(isDark),
-          ),
-          Expanded(
-            child: _buildStatItem(
-              icon: Icons.local_fire_department,
-              label: '연속 일수',
-              value: '${_streakDays}일',
-              color: AppColors.warning,
-              isDark: isDark,
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 600.ms).slideY(
-      begin: 0.3,
-      end: 0,
-      duration: 600.ms,
-      curve: Curves.easeOutQuart,
-    );
-  }
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: color,
-          size: 24,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.getTextPrimary(isDark),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelProgress(bool isDark) {
-    final currentLevelTrees = _totalTrees % 10;
-    final nextLevelTrees = 10;
-    final progress = currentLevelTrees / nextLevelTrees;
-
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.getSurface(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.getBorder(isDark),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '다음 레벨까지',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.getTextPrimary(isDark),
-                ),
-              ),
-              Text(
-                '$currentLevelTrees/$nextLevelTrees',
+                AnimalData.getAnimalDescription(nextAnimal),
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
               ),
+              const SizedBox(height: 12),
+              
+              _buildProgressIndicator(isDark, nextAnimal),
             ],
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.getBorder(isDark),
-              valueColor: AlwaysStoppedAnimation(AppColors.primary),
-              minHeight: 8,
+        ),
+      ],
+    ).animate().fadeIn(
+      delay: 200.ms,
+      duration: 600.ms,
+    );
+  }
+
+  Widget _buildProgressIndicator(bool isDark, AnimalType nextAnimal) {
+    final requiredHours = AnimalData.getUnlockHours(nextAnimal);
+    final currentHours = _userProgress!.totalFocusMinutes ~/ 60;
+    final progress = (currentHours / requiredHours).clamp(0.0, 1.0);
+    final specialCondition = AnimalData.getSpecialUnlockCondition(nextAnimal);
+    
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '집중 시간',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
+            Text(
+              '$currentHours / $requiredHours 시간',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.getTextPrimary(isDark),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        
+        LinearProgressIndicator(
+          value: progress,
+          backgroundColor: AppColors.getBorder(isDark),
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.brown),
+        ),
+        
+        if (specialCondition.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            '나무 ${nextLevelTrees - currentLevelTrees}그루 더 심으면 레벨업! 🌟',
-            style: const TextStyle(
+            '추가 조건: ${specialCondition['description']}',
+            style: TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
             ),
           ),
         ],
-      ),
-    ).animate().fadeIn(
-      delay: 200.ms,
-      duration: 600.ms,
-    ).slideY(
-      begin: 0.3,
-      end: 0,
-      delay: 200.ms,
-      duration: 600.ms,
-      curve: Curves.easeOutQuart,
-    );
-  }
-
-  Widget _buildForestGrid(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.getSurface(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.getBorder(isDark),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '내 숲',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.getTextPrimary(isDark),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _totalTrees == 0 
-              ? _buildEmptyForest(isDark)
-              : _buildTreeGrid(isDark),
-        ],
-      ),
-    ).animate().fadeIn(
-      delay: 400.ms,
-      duration: 600.ms,
-    ).slideY(
-      begin: 0.3,
-      end: 0,
-      delay: 400.ms,
-      duration: 600.ms,
-      curve: Curves.easeOutQuart,
-    );
-  }
-
-  Widget _buildEmptyForest(bool isDark) {
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        color: AppColors.primarySurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.park_outlined,
-              size: 48,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '아직 나무가 없어요',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppColors.getTextPrimary(isDark),
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '25분 이상 집중하면 나무가 자라요 🌱',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTreeGrid(bool isDark) {
-    final maxGridSize = 50; // 10x5 그리드
-    final rows = (maxGridSize / 10).ceil();
-    
-    return Column(
-      children: List.generate(rows, (rowIndex) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(10, (colIndex) {
-              final treeIndex = rowIndex * 10 + colIndex;
-              final hasTree = treeIndex < _totalTrees;
-              
-              return _buildTreeSpot(hasTree, treeIndex, isDark);
-            }),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildTreeSpot(bool hasTree, int index, bool isDark) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: hasTree 
-            ? AppColors.treeGreen.withOpacity(0.2)
-            : AppColors.getBorder(isDark),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: hasTree
-          ? Icon(
-              _getTreeIcon(index),
-              size: 16,
-              color: AppColors.treeGreen,
-            )
-          : Container(),
-    ).animate(delay: Duration(milliseconds: index * 50))
-        .fadeIn(duration: 300.ms)
-        .scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1));
-  }
-
-  IconData _getTreeIcon(int index) {
-    // 나무 종류를 다양하게 표시
-    final icons = [
-      Icons.park,
-      Icons.forest,
-      Icons.eco,
-      Icons.nature,
-    ];
-    return icons[index % icons.length];
-  }
-
-  Widget _buildAchievementInfo(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.getSurface(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.getBorder(isDark),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '성취 현황',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.getTextPrimary(isDark),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildAchievementItem(
-            icon: Icons.timer,
-            title: '총 집중 시간',
-            description: '${(_totalFocusTime / 60).floor()}시간 ${_totalFocusTime % 60}분',
-            color: AppColors.primary,
-            isDark: isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildAchievementItem(
-            icon: Icons.local_fire_department,
-            title: '최고 연속 기록',
-            description: '$_streakDays일 연속 집중',
-            color: AppColors.warning,
-            isDark: isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildAchievementItem(
-            icon: Icons.eco,
-            title: '환경 보호 기여',
-            description: '실제 나무 ${(_totalTrees * 0.1).toStringAsFixed(1)}그루 상당',
-            color: AppColors.treeGreen,
-            isDark: isDark,
-          ),
-        ],
-      ),
-    ).animate().fadeIn(
-      delay: 600.ms,
-      duration: 600.ms,
-    ).slideY(
-      begin: 0.3,
-      end: 0,
-      delay: 600.ms,
-      duration: 600.ms,
-      curve: Curves.easeOutQuart,
-    );
-  }
-
-  Widget _buildAchievementItem({
-    required IconData icon,
-    required String title,
-    required String description,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.getTextPrimary(isDark),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                description,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }

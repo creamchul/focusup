@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../services/storage_service.dart';
 import '../services/notification_service.dart';
+import '../services/category_service.dart';
+import '../services/theme_service.dart';
 import 'category_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -17,8 +20,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _darkModeEnabled = false;
-  int _defaultPomodoroTime = 25;
-  int _breakTime = 5;
   int _dailyGoal = 120; // 분 단위 (2시간)
   bool _isDisposed = false;
 
@@ -37,13 +38,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     if (_isDisposed) return;
     
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    final isDark = await themeService.getDarkMode();
+    
     if (mounted && !_isDisposed) {
       setState(() {
         _notificationsEnabled = StorageService.isNotificationEnabled();
         _soundEnabled = StorageService.isSoundEnabled();
-        _darkModeEnabled = StorageService.isDarkModeEnabled();
-        _defaultPomodoroTime = StorageService.getDefaultPomodoroTime();
-        _breakTime = StorageService.getBreakTime();
+        _darkModeEnabled = isDark;
         // 일일 목표는 임시로 고정값 사용 (향후 확장 가능)
       });
     }
@@ -85,9 +87,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
               
               _buildGeneralSettings(isDark),
-              const SizedBox(height: 20),
-              
-              _buildTimerSettings(isDark),
               const SizedBox(height: 20),
               
               _buildNotificationSettings(isDark),
@@ -144,11 +143,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.dark_mode,
           value: _darkModeEnabled,
           onChanged: (value) async {
+            final themeService = Provider.of<ThemeService>(context, listen: false);
+            await themeService.setDarkMode(value);
+            
             setState(() {
               _darkModeEnabled = value;
             });
             await StorageService.setDarkModeEnabled(value);
-            // 실제로는 앱 재시작이나 테마 변경 로직이 필요
+            
             _showSnackBar('다크 모드 설정이 변경되었습니다');
           },
           isDark: isDark,
@@ -173,60 +175,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ).animate().fadeIn(duration: 600.ms).slideY(
       begin: 0.3,
       end: 0,
-      duration: 600.ms,
-      curve: Curves.easeOutQuart,
-    );
-  }
-
-  Widget _buildTimerSettings(bool isDark) {
-    return _buildSettingsSection(
-      title: '타이머 설정',
-      isDark: isDark,
-      children: [
-        _buildNumberTile(
-          title: '기본 포모도로 시간',
-          subtitle: '집중 세션 기본 시간',
-          icon: Icons.timer,
-          value: _defaultPomodoroTime,
-          unit: '분',
-          min: 15,
-          max: 60,
-          step: 5,
-          onChanged: (value) async {
-            setState(() {
-              _defaultPomodoroTime = value;
-            });
-            await StorageService.setDefaultPomodoroTime(value);
-            _showSnackBar('기본 포모도로 시간이 ${value}분으로 설정되었습니다');
-          },
-          isDark: isDark,
-        ),
-        _buildNumberTile(
-          title: '휴식 시간',
-          subtitle: '집중 후 휴식 시간',
-          icon: Icons.coffee,
-          value: _breakTime,
-          unit: '분',
-          min: 5,
-          max: 30,
-          step: 5,
-          onChanged: (value) async {
-            setState(() {
-              _breakTime = value;
-            });
-            await StorageService.setBreakTime(value);
-            _showSnackBar('휴식 시간이 ${value}분으로 설정되었습니다');
-          },
-          isDark: isDark,
-        ),
-      ],
-    ).animate().fadeIn(
-      delay: 200.ms,
-      duration: 600.ms,
-    ).slideY(
-      begin: 0.3,
-      end: 0,
-      delay: 200.ms,
       duration: 600.ms,
       curve: Curves.easeOutQuart,
     );
@@ -294,8 +242,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       isDark: isDark,
       children: [
         _buildActionTile(
+          title: '카테고리 복구',
+          subtitle: '카테고리를 기본값으로 복구',
+          icon: Icons.refresh,
+          onTap: () {
+            _showCategoryResetDialog();
+          },
+          isDark: isDark,
+        ),
+        _buildActionTile(
           title: '데이터 백업',
-          subtitle: '내 데이터를 안전하게 백업',
+          subtitle: '현재 데이터를 백업합니다',
           icon: Icons.backup,
           onTap: () {
             _showComingSoonDialog('데이터 백업');
@@ -546,7 +503,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '$value$unit',
+                unit == '없음' ? '없음' : '$value$unit',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -625,11 +582,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showSnackBar(String message) {
     if (mounted && !_isDisposed) {
+      // 기존 스낵바 제거 후 새로운 스낵바 표시
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           duration: const Duration(seconds: 2),
           backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -680,7 +640,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
         content: const Text(
-          '모든 집중 기록, 나무, 통계가 삭제됩니다.\n정말로 초기화하시겠습니까?',
+          '모든 집중 기록, 동물 친구들, 통계가 삭제됩니다.\n정말로 초기화하시겠습니까?',
           style: TextStyle(fontSize: 16),
         ),
         actions: [
@@ -730,12 +690,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             SizedBox(height: 16),
             Text(
-              '집중할 때마다 나무가 자라는\n생산성 앱입니다. 🌱',
-              style: TextStyle(fontSize: 14),
+              '집중할 때마다 동물 친구와\n더 친해지는 생산성 앱입니다. 🐾',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
             ),
             SizedBox(height: 12),
             Text(
-              '포모도로 기법을 활용해 집중하고,\n나만의 숲을 만들어보세요!',
+              '타이머를 활용해 집중하고,\n동물 친구들과 함께 성장해보세요!',
               style: TextStyle(fontSize: 14),
             ),
           ],
@@ -797,6 +762,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (mounted) Navigator.pop(context);
             },
             child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCategoryResetDialog() {
+    if (!mounted || _isDisposed) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.refresh, color: AppColors.warning, size: 24),
+            SizedBox(width: 8),
+            Text('카테고리 복구'),
+          ],
+        ),
+        content: const Text(
+          '카테고리를 기본값으로 복구하시겠습니까?\n기존 카테고리 설정이 초기화됩니다.',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await CategoryService.resetToDefault();
+                if (mounted) {
+                  Navigator.pop(context);
+                  _showSnackBar('카테고리가 기본값으로 복구되었습니다');
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context);
+                  _showSnackBar('복구에 실패했습니다: $e');
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.warning),
+            child: const Text('복구'),
           ),
         ],
       ),

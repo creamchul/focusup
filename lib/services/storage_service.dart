@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/stats_period.dart';
 import 'category_service.dart';
 
 /// 로컬 데이터 저장을 위한 서비스
@@ -215,34 +216,61 @@ class StorageService {
   // 통계 관련 데이터
   // ============================================================================
   
-  /// 주간 집중 시간 리스트 (최근 7일)
-  static List<int> getWeeklyFocusTime() {
-    final List<int> weeklyData = [];
-    final now = DateTime.now();
-    
-    for (int i = 6; i >= 0; i--) {
-      final date = now.subtract(Duration(days: i));
-      final dateString = date.toIso8601String().split('T')[0];
-      final focusTime = prefs.getInt('focus_time_$dateString') ?? 0;
-      weeklyData.add(focusTime);
+  /// 일별 집중 시간 데이터 가져오기
+  static Map<DateTime, int> getDailyFocusTime(DateTime date) {
+    final Map<DateTime, int> data = {};
+    for (var i = 0; i < 24; i++) {
+      final hourDate = DateTime(date.year, date.month, date.day, i);
+      final key = 'focus_time_${hourDate.toIso8601String()}';
+      data[hourDate] = prefs.getInt(key) ?? 0;
     }
-    
-    return weeklyData;
+    return data;
   }
-  
-  /// 월간 집중 시간 리스트 (최근 30일)
-  static List<int> getMonthlyFocusTime() {
-    final List<int> monthlyData = [];
-    final now = DateTime.now();
+
+  /// 주간 집중 시간 데이터 가져오기
+  static Map<DateTime, int> getWeeklyFocusTime(DateTime date) {
+    final weekStart = date.subtract(Duration(days: date.weekday - 1));
+    final Map<DateTime, int> data = {};
     
-    for (int i = 29; i >= 0; i--) {
-      final date = now.subtract(Duration(days: i));
-      final dateString = date.toIso8601String().split('T')[0];
-      final focusTime = prefs.getInt('focus_time_$dateString') ?? 0;
-      monthlyData.add(focusTime);
+    for (var i = 0; i < 7; i++) {
+      final dayDate = weekStart.add(Duration(days: i));
+      final key = 'focus_time_${dayDate.toIso8601String().split('T')[0]}';
+      data[dayDate] = prefs.getInt(key) ?? 0;
     }
+    return data;
+  }
+
+  /// 월간 집중 시간 데이터 가져오기
+  static Map<DateTime, int> getMonthlyFocusTime(DateTime date) {
+    final Map<DateTime, int> data = {};
+    final daysInMonth = DateTime(date.year, date.month + 1, 0).day;
     
-    return monthlyData;
+    for (var i = 1; i <= daysInMonth; i++) {
+      final dayDate = DateTime(date.year, date.month, i);
+      final key = 'focus_time_${dayDate.toIso8601String().split('T')[0]}';
+      data[dayDate] = prefs.getInt(key) ?? 0;
+    }
+    return data;
+  }
+
+  /// 연간 집중 시간 데이터 가져오기
+  static Map<DateTime, int> getYearlyFocusTime(DateTime date) {
+    final Map<DateTime, int> data = {};
+    
+    for (var i = 1; i <= 12; i++) {
+      final monthDate = DateTime(date.year, i);
+      var monthlyTotal = 0;
+      final daysInMonth = DateTime(date.year, i + 1, 0).day;
+      
+      for (var day = 1; day <= daysInMonth; day++) {
+        final dayDate = DateTime(date.year, i, day);
+        final key = 'focus_time_${dayDate.toIso8601String().split('T')[0]}';
+        monthlyTotal += prefs.getInt(key) ?? 0;
+      }
+      
+      data[monthDate] = monthlyTotal;
+    }
+    return data;
   }
   
   /// 카테고리별 주간 집중 시간
@@ -325,5 +353,188 @@ class StorageService {
       final date = DateTime.now().subtract(Duration(days: i)).toIso8601String().split('T')[0];
       await prefs.setInt('focus_time_$date', 60 + (i * 20)); // 점진적으로 증가하는 패턴
     }
+  }
+
+  /// 기간 비교 데이터 가져오기 (일간)
+  static Map<String, int> getCompareDailyData() {
+    final today = DateTime.now();
+    final yesterday = today.subtract(const Duration(days: 1));
+    final twoDaysAgo = today.subtract(const Duration(days: 2));
+
+    return {
+      '오늘': prefs.getInt('focus_time_${today.toIso8601String().split('T')[0]}') ?? 0,
+      '어제': prefs.getInt('focus_time_${yesterday.toIso8601String().split('T')[0]}') ?? 0,
+      '그저께': prefs.getInt('focus_time_${twoDaysAgo.toIso8601String().split('T')[0]}') ?? 0,
+    };
+  }
+
+  /// 기간 비교 데이터 가져오기 (주간)
+  static Map<String, int> getCompareWeeklyData() {
+    final now = DateTime.now();
+    final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
+    final lastWeekStart = thisWeekStart.subtract(const Duration(days: 7));
+    final twoWeeksAgoStart = thisWeekStart.subtract(const Duration(days: 14));
+
+    Map<String, int> data = {
+      '이번 주': 0,
+      '저번 주': 0,
+      '저저번 주': 0,
+    };
+
+    // 이번 주
+    for (var i = 0; i < 7; i++) {
+      final date = thisWeekStart.add(Duration(days: i));
+      final key = 'focus_time_${date.toIso8601String().split('T')[0]}';
+      data['이번 주'] = (data['이번 주'] ?? 0) + (prefs.getInt(key) ?? 0);
+    }
+
+    // 저번 주
+    for (var i = 0; i < 7; i++) {
+      final date = lastWeekStart.add(Duration(days: i));
+      final key = 'focus_time_${date.toIso8601String().split('T')[0]}';
+      data['저번 주'] = (data['저번 주'] ?? 0) + (prefs.getInt(key) ?? 0);
+    }
+
+    // 저저번 주
+    for (var i = 0; i < 7; i++) {
+      final date = twoWeeksAgoStart.add(Duration(days: i));
+      final key = 'focus_time_${date.toIso8601String().split('T')[0]}';
+      data['저저번 주'] = (data['저저번 주'] ?? 0) + (prefs.getInt(key) ?? 0);
+    }
+
+    return data;
+  }
+
+  /// 기간 비교 데이터 가져오기 (월간)
+  static Map<String, int> getCompareMonthlyData() {
+    final now = DateTime.now();
+    final thisMonth = DateTime(now.year, now.month);
+    final lastMonth = DateTime(now.year, now.month - 1);
+    final twoMonthsAgo = DateTime(now.year, now.month - 2);
+
+    Map<String, int> data = {
+      '이번 달': 0,
+      '저번 달': 0,
+      '저저번 달': 0,
+    };
+
+    // 각 월의 데이터 계산
+    for (var entry in [
+      {'date': thisMonth, 'key': '이번 달'},
+      {'date': lastMonth, 'key': '저번 달'},
+      {'date': twoMonthsAgo, 'key': '저저번 달'},
+    ]) {
+      final date = entry['date'] as DateTime;
+      final key = entry['key'] as String;
+      final daysInMonth = DateTime(date.year, date.month + 1, 0).day;
+
+      for (var day = 1; day <= daysInMonth; day++) {
+        final dayDate = DateTime(date.year, date.month, day);
+        final storageKey = 'focus_time_${dayDate.toIso8601String().split('T')[0]}';
+        data[key] = (data[key] ?? 0) + (prefs.getInt(storageKey) ?? 0);
+      }
+    }
+
+    return data;
+  }
+
+  /// 기간 비교 데이터 가져오기 (연간)
+  static Map<String, int> getCompareYearlyData() {
+    final now = DateTime.now();
+    final thisYear = now.year;
+
+    Map<String, int> data = {
+      '올해': 0,
+      '작년': 0,
+      '재작년': 0,
+    };
+
+    // 각 연도의 데이터 계산
+    for (var entry in [
+      {'year': thisYear, 'key': '올해'},
+      {'year': thisYear - 1, 'key': '작년'},
+      {'year': thisYear - 2, 'key': '재작년'},
+    ]) {
+      final year = entry['year'] as int;
+      final key = entry['key'] as String;
+
+      for (var month = 1; month <= 12; month++) {
+        final daysInMonth = DateTime(year, month + 1, 0).day;
+        for (var day = 1; day <= daysInMonth; day++) {
+          final date = DateTime(year, month, day);
+          final storageKey = 'focus_time_${date.toIso8601String().split('T')[0]}';
+          data[key] = (data[key] ?? 0) + (prefs.getInt(storageKey) ?? 0);
+        }
+      }
+    }
+
+    return data;
+  }
+
+  /// 카테고리별 집중 시간 분석 데이터 가져오기
+  static Future<Map<String, int>> getCategoryAnalysis(StatsPeriod period, DateTime date) async {
+    Map<String, int> data = {};
+    final categories = await CategoryService.getCategories();
+
+    switch (period) {
+      case StatsPeriod.day:
+        final dateStr = date.toIso8601String().split('T')[0];
+        for (var category in categories) {
+          final time = prefs.getInt('category_time_${category.id}_$dateStr') ?? 0;
+          if (time > 0) {
+            data[category.name] = time;
+          }
+        }
+        break;
+
+      case StatsPeriod.week:
+        final weekStart = date.subtract(Duration(days: date.weekday - 1));
+        for (var category in categories) {
+          int total = 0;
+          for (var i = 0; i < 7; i++) {
+            final dayDate = weekStart.add(Duration(days: i));
+            final dateStr = dayDate.toIso8601String().split('T')[0];
+            total += prefs.getInt('category_time_${category.id}_$dateStr') ?? 0;
+          }
+          if (total > 0) {
+            data[category.name] = total;
+          }
+        }
+        break;
+
+      case StatsPeriod.month:
+        final daysInMonth = DateTime(date.year, date.month + 1, 0).day;
+        for (var category in categories) {
+          int total = 0;
+          for (var day = 1; day <= daysInMonth; day++) {
+            final dayDate = DateTime(date.year, date.month, day);
+            final dateStr = dayDate.toIso8601String().split('T')[0];
+            total += prefs.getInt('category_time_${category.id}_$dateStr') ?? 0;
+          }
+          if (total > 0) {
+            data[category.name] = total;
+          }
+        }
+        break;
+
+      case StatsPeriod.year:
+        for (var category in categories) {
+          int total = 0;
+          for (var month = 1; month <= 12; month++) {
+            final daysInMonth = DateTime(date.year, month + 1, 0).day;
+            for (var day = 1; day <= daysInMonth; day++) {
+              final dayDate = DateTime(date.year, month, day);
+              final dateStr = dayDate.toIso8601String().split('T')[0];
+              total += prefs.getInt('category_time_${category.id}_$dateStr') ?? 0;
+            }
+          }
+          if (total > 0) {
+            data[category.name] = total;
+          }
+        }
+        break;
+    }
+
+    return data;
   }
 } 

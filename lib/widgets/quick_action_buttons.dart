@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
 class QuickActionButtons extends StatelessWidget {
-  final VoidCallback onPomodoroTap;
-  final VoidCallback onFreeTimerTap;
+  final VoidCallback onTimerTap;
   final VoidCallback onStopwatchTap;
 
   const QuickActionButtons({
     super.key,
-    required this.onPomodoroTap,
-    required this.onFreeTimerTap,
+    required this.onTimerTap,
     required this.onStopwatchTap,
   });
 
@@ -35,38 +33,25 @@ class QuickActionButtons extends StatelessWidget {
             Expanded(
               child: _buildActionButton(
                 icon: Icons.timer,
-                title: '포모도로',
-                subtitle: '25분 집중',
+                title: '타이머',
+                subtitle: '집중 시간 설정',
                 color: AppColors.primary,
-                onTap: onPomodoroTap,
+                onTap: onTimerTap,
                 isDark: isDark,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: _buildActionButton(
-                icon: Icons.schedule,
-                title: '자유 타이머',
-                subtitle: '원하는 시간',
-                color: AppColors.info,
-                onTap: onFreeTimerTap,
+                icon: Icons.play_circle_outline,
+                title: '스톱워치',
+                subtitle: '시간 측정하기',
+                color: AppColors.warning,
+                onTap: onStopwatchTap,
                 isDark: isDark,
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: _buildActionButton(
-            icon: Icons.play_circle_outline,
-            title: '스톱워치',
-            subtitle: '시간 측정하기',
-            color: AppColors.warning,
-            onTap: onStopwatchTap,
-            isDark: isDark,
-            isWide: true,
-          ),
         ),
       ],
     );
@@ -79,12 +64,11 @@ class QuickActionButtons extends StatelessWidget {
     required Color color,
     required VoidCallback onTap,
     required bool isDark,
-    bool isWide = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(isWide ? 20 : 16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.getSurface(isDark),
           borderRadius: BorderRadius.circular(16),
@@ -100,87 +84,41 @@ class QuickActionButtons extends StatelessWidget {
             ),
           ],
         ),
-        child: isWide
-            ? Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: color,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.getTextPrimary(isDark),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    color: AppColors.textSecondary,
-                    size: 16,
-                  ),
-                ],
-              )
-            : Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: color,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.getTextPrimary(isDark),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.getTextPrimary(isDark),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

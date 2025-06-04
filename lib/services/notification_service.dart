@@ -81,7 +81,7 @@ class NotificationService {
     await _notifications.show(
       1001,
       '🎉 집중 완료!',
-      '$focusMinutes분 집중을 완료했습니다! 🌳 총 ${totalTrees}그루의 나무가 자랐어요.',
+      '$focusMinutes분 집중을 완료했습니다! �� 동물 친구와 더 친해졌어요!',
       notificationDetails,
     );
   }

@@ -10,9 +10,13 @@ enum PrecisionTimerStatus {
 }
 
 enum TimerMode {
-  pomodoro,
-  freeTimer,
+  timer,
   stopwatch,
+}
+
+enum TimerPhase {
+  focus,
+  rest,
 }
 
 class PrecisionTimerService extends ChangeNotifier {
@@ -22,13 +26,19 @@ class PrecisionTimerService extends ChangeNotifier {
 
   // 타이머 상태
   PrecisionTimerStatus _status = PrecisionTimerStatus.stopped;
-  TimerMode _mode = TimerMode.pomodoro;
+  TimerMode _mode = TimerMode.timer;
+  TimerPhase _phase = TimerPhase.focus;
   
   // 시간 관련
   DateTime? _startTime;
   DateTime? _pausedTime;
   Duration _pausedDuration = Duration.zero;
   Duration _targetDuration = const Duration(minutes: 25);
+  
+  // 브레이크 관련
+  Duration? _breakDuration;
+  bool _hasBreak = false;
+  int _completedCycles = 0;
   
   // 세션 정보
   String? _categoryId;
@@ -40,8 +50,12 @@ class PrecisionTimerService extends ChangeNotifier {
   // Getters
   PrecisionTimerStatus get status => _status;
   TimerMode get mode => _mode;
+  TimerPhase get phase => _phase;
   Duration get targetDuration => _targetDuration;
   String? get categoryId => _categoryId;
+  Duration? get breakDuration => _breakDuration;
+  bool get hasBreak => _hasBreak;
+  int get completedCycles => _completedCycles;
   
   /// 현재 경과 시간 계산 (정밀)
   Duration get elapsedTime {
@@ -49,16 +63,11 @@ class PrecisionTimerService extends ChangeNotifier {
       return Duration.zero;
     }
     
-    final now = DateTime.now();
-    Duration elapsed;
-    
     if (_status == PrecisionTimerStatus.paused && _pausedTime != null) {
-      elapsed = _pausedTime!.difference(_startTime!) + _pausedDuration;
-    } else {
-      elapsed = now.difference(_startTime!) + _pausedDuration;
+      return _pausedTime!.difference(_startTime!) + _pausedDuration;
     }
     
-    return elapsed;
+    return DateTime.now().difference(_startTime!) + _pausedDuration;
   }
   
   /// 남은 시간 계산
@@ -67,42 +76,72 @@ class PrecisionTimerService extends ChangeNotifier {
       return Duration.zero; // 스톱워치는 남은 시간이 없음
     }
     
-    final remaining = _targetDuration - elapsedTime;
+    final currentTarget = _getCurrentTargetDuration();
+    final remaining = currentTarget - elapsedTime;
     return remaining.isNegative ? Duration.zero : remaining;
+  }
+  
+  /// 현재 페이즈의 목표 시간 반환
+  Duration _getCurrentTargetDuration() {
+    if (_phase == TimerPhase.focus) {
+      return _targetDuration;
+    } else {
+      return _breakDuration ?? Duration.zero;
+    }
   }
   
   /// 진행률 (0.0 ~ 1.0)
   double get progress {
-    if (_mode == TimerMode.stopwatch || _targetDuration.inMicroseconds == 0) {
+    if (_mode == TimerMode.stopwatch) {
+      return 0.0;
+    }
+    
+    final currentTarget = _getCurrentTargetDuration();
+    if (currentTarget.inMicroseconds == 0) {
       return 0.0;
     }
     
     final elapsed = elapsedTime.inMicroseconds;
-    final target = _targetDuration.inMicroseconds;
+    final target = currentTarget.inMicroseconds;
     final progress = elapsed / target;
     
     return progress.clamp(0.0, 1.0);
   }
   
-  /// 포모도로 타이머 시작
-  void startPomodoro({
-    int minutes = 25,
+  /// 타이머 시작 전에 목표 시간 설정
+  void setTargetDuration({
+    required int minutes,
+    int? breakMinutes,
+    TimerMode? mode,
     String? categoryId,
   }) {
-    _mode = TimerMode.pomodoro;
+    if (_status != PrecisionTimerStatus.stopped) return;
+    
+    _mode = mode ?? TimerMode.timer;
     _targetDuration = Duration(minutes: minutes);
+    _breakDuration = breakMinutes != null ? Duration(minutes: breakMinutes) : null;
+    _hasBreak = breakMinutes != null && breakMinutes > 0;
     _categoryId = categoryId;
-    _startTimer();
+    _phase = TimerPhase.focus;
+    _completedCycles = 0;
+    
+    dev.log('목표 시간 설정: $minutes분, 브레이크: ${breakMinutes ?? "없음"}분');
+    notifyListeners();
   }
   
   /// 자유 타이머 시작
   void startFreeTimer({
     required int minutes,
+    int? breakMinutes,
     String? categoryId,
   }) {
-    _mode = TimerMode.freeTimer;
+    _mode = TimerMode.timer;
     _targetDuration = Duration(minutes: minutes);
+    _breakDuration = breakMinutes != null ? Duration(minutes: breakMinutes) : null;
+    _hasBreak = breakMinutes != null && breakMinutes > 0;
     _categoryId = categoryId;
+    _phase = TimerPhase.focus;
+    _completedCycles = 0;
     _startTimer();
   }
   
@@ -112,15 +151,20 @@ class PrecisionTimerService extends ChangeNotifier {
   }) {
     _mode = TimerMode.stopwatch;
     _targetDuration = Duration.zero;
+    _breakDuration = null;
+    _hasBreak = false;
     _categoryId = categoryId;
+    _phase = TimerPhase.focus;
+    _completedCycles = 0;
     _startTimer();
   }
   
   /// 타이머 시작
   void _startTimer() {
     if (_status == PrecisionTimerStatus.paused) {
-      // 일시정지에서 재개
-      _pausedDuration += DateTime.now().difference(_pausedTime ?? DateTime.now());
+      // 일시정지에서 재개할 때 시작 시간 조정
+      final pauseDuration = DateTime.now().difference(_pausedTime!);
+      _startTime = _startTime!.add(pauseDuration);
       _pausedTime = null;
     } else {
       // 새로 시작
@@ -132,7 +176,7 @@ class PrecisionTimerService extends ChangeNotifier {
     _status = PrecisionTimerStatus.running;
     _startPeriodicUpdates();
     
-    dev.log('타이머 시작: $_mode, 목표: $_targetDuration');
+    dev.log('타이머 시작: $_mode, 페이즈: $_phase, 목표: ${_getCurrentTargetDuration()}');
     notifyListeners();
   }
   
@@ -154,11 +198,60 @@ class PrecisionTimerService extends ChangeNotifier {
     _startTime = null;
     _pausedTime = null;
     _pausedDuration = Duration.zero;
+    _phase = TimerPhase.focus;
+    _completedCycles = 0;
     _timer?.cancel();
     _clearSessionData();
     
     dev.log('타이머 정지');
     notifyListeners();
+  }
+  
+  /// 다음 페이즈로 전환 (포커스 -> 브레이크 -> 포커스)
+  void _switchToNextPhase() {
+    if (_phase == TimerPhase.focus) {
+      _completedCycles++;
+      if (_hasBreak && _breakDuration != null) {
+        // 브레이크 시작
+        _phase = TimerPhase.rest;
+        dev.log('브레이크 시작: ${_breakDuration!.inMinutes}분');
+      } else {
+        // 브레이크가 없으면 완료
+        _status = PrecisionTimerStatus.completed;
+        _timer?.cancel();
+        dev.log('세션 완료 (브레이크 없음)');
+        notifyListeners();
+        return;
+      }
+    } else {
+      // 브레이크 완료, 포커스로 돌아가기
+      _phase = TimerPhase.focus;
+      dev.log('브레이크 완료, 포커스로 전환');
+    }
+    
+    // 타이머 재시작
+    _startTime = DateTime.now();
+    _pausedDuration = Duration.zero;
+    _pausedTime = null;
+    _status = PrecisionTimerStatus.running;
+    
+    notifyListeners();
+  }
+  
+  /// 브레이크 건너뛰기
+  void skipBreak() {
+    if (_phase == TimerPhase.rest && _status == PrecisionTimerStatus.running) {
+      _switchToNextPhase();
+    }
+  }
+  
+  /// 테스트용 5분 빨리가기
+  void skipFiveMinutes() {
+    if (_status == PrecisionTimerStatus.running) {
+      _pausedDuration += const Duration(minutes: 5);
+      dev.log('5분 빨리가기 적용');
+      notifyListeners();
+    }
   }
   
   /// 주기적 업데이트 시작
@@ -167,10 +260,19 @@ class PrecisionTimerService extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       // 완료 체크 (스톱워치 제외)
       if (_mode != TimerMode.stopwatch && remainingTime.inMicroseconds <= 0) {
-        _status = PrecisionTimerStatus.completed;
-        timer.cancel();
-        dev.log('타이머 완료');
-        notifyListeners();
+        if (_phase == TimerPhase.focus && _hasBreak) {
+          // 포커스 완료, 브레이크로 전환
+          _switchToNextPhase();
+        } else if (_phase == TimerPhase.rest) {
+          // 브레이크 완료, 포커스로 전환
+          _switchToNextPhase();
+        } else {
+          // 완전히 완료
+          _status = PrecisionTimerStatus.completed;
+          timer.cancel();
+          dev.log('타이머 완료');
+          notifyListeners();
+        }
         return;
       }
       
@@ -204,7 +306,7 @@ class PrecisionTimerService extends ChangeNotifier {
       
       _mode = TimerMode.values.firstWhere(
         (e) => e.toString() == modeString,
-        orElse: () => TimerMode.pomodoro,
+        orElse: () => TimerMode.timer,
       );
       
       _startTime = DateTime.parse(startTimeString);

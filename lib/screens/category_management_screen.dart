@@ -51,6 +51,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   void _showErrorMessage(String message) {
     if (!mounted || _isDisposed) return;
     
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -63,6 +64,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   void _showSuccessMessage(String message) {
     if (!mounted || _isDisposed) return;
     
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -470,14 +472,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       itemCount: _categories.length,
       itemBuilder: (context, index) {
         final category = _categories[index];
-        return _buildCategoryCard(category, isDark);
+        return _buildCategoryCard(category, isDark, index);
       },
     );
   }
 
-  Widget _buildCategoryCard(FocusCategoryModel category, bool isDark) {
+  Widget _buildCategoryCard(FocusCategoryModel category, bool isDark, int index) {
     return Container(
-      key: ValueKey(category.id),
+      key: Key(category.id),
       margin: const EdgeInsets.only(bottom: 12),
       child: Card(
         color: AppColors.getSurface(isDark),
@@ -607,7 +609,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               
               // 드래그 핸들
               ReorderableDragStartListener(
-                index: _categories.indexOf(category),
+                index: index,
                 child: Icon(
                   Icons.drag_handle,
                   color: AppColors.textSecondary,
@@ -617,15 +619,6 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           ),
         ),
       ),
-    ).animate().fadeIn(
-      delay: Duration(milliseconds: _categories.indexOf(category) * 100),
-      duration: 400.ms,
-    ).slideX(
-      begin: 0.3,
-      end: 0,
-      delay: Duration(milliseconds: _categories.indexOf(category) * 100),
-      duration: 400.ms,
-      curve: Curves.easeOutQuart,
     );
   }
 } 
