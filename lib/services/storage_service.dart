@@ -219,11 +219,45 @@ class StorageService {
   /// 일별 집중 시간 데이터 가져오기
   static Map<DateTime, int> getDailyFocusTime(DateTime date) {
     final Map<DateTime, int> data = {};
+    
+    // 선택된 날짜의 전체 집중 시간을 가져옴
+    final dateKey = date.toIso8601String().split('T')[0];
+    final totalFocusTime = prefs.getInt('focus_time_$dateKey') ?? 0;
+    
+    // 모든 시간을 0으로 초기화
     for (var i = 0; i < 24; i++) {
       final hourDate = DateTime(date.year, date.month, date.day, i);
-      final key = 'focus_time_${hourDate.toIso8601String()}';
-      data[hourDate] = prefs.getInt(key) ?? 0;
+      data[hourDate] = 0;
     }
+    
+    // 실제 집중 시간이 있는 경우에만 표시
+    if (totalFocusTime > 0) {
+      final isToday = dateKey == DateTime.now().toIso8601String().split('T')[0];
+      
+      if (isToday) {
+        // 오늘 날짜인 경우 현재 시간에 모든 집중 시간을 표시
+        final currentHour = DateTime.now().hour;
+        final currentHourDate = DateTime(date.year, date.month, date.day, currentHour);
+        data[currentHourDate] = totalFocusTime;
+      } else {
+        // 과거 날짜인 경우 주요 집중 시간대에 분산
+        final focusHours = [9, 14, 20]; // 오전 9시, 오후 2시, 저녁 8시
+        final timePerHour = (totalFocusTime / focusHours.length).round();
+        
+        for (final hour in focusHours) {
+          final hourDate = DateTime(date.year, date.month, date.day, hour);
+          data[hourDate] = timePerHour;
+        }
+        
+        // 나머지 시간을 마지막 시간대에 추가
+        final remainder = totalFocusTime - (timePerHour * focusHours.length);
+        if (remainder > 0) {
+          final lastHourDate = DateTime(date.year, date.month, date.day, focusHours.last);
+          data[lastHourDate] = (data[lastHourDate] ?? 0) + remainder;
+        }
+      }
+    }
+    
     return data;
   }
 
